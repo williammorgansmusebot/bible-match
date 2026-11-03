@@ -338,7 +338,7 @@ function renderTop(){
       <div class="book-bar"><i style="width:${pct}%"></i></div></div>`;
   }).join("");
   if(selectedBook&&active.length<3){
-    $("books").innerHTML+=`<div class="quickstart" style="flex:${3-active.length}"><div class="qs-box"><div class="qs-title">Quick start</div><div class="qs-text">Tap a word bubble — it flies to its book. Finish a book to count a scripture.</div><button class="qs-btn" id="qsStartBtn">▶ Press here to start with 3 random books</button></div></div>`;
+    $("books").innerHTML+=`<div class="quickstart" style="flex:${3-active.length}"><div class="qs-box"><div class="qs-title">Quick start</div><div class="qs-text">Tap a word bubble — it flies to its book. Finish a book to count a scripture.</div><button class="qs-btn" id="qsStartBtn" onclick="shuffleAll()">▶ Press here to start with 3 random books</button></div></div>`;
     let qsBtn=$("qsStartBtn");if(qsBtn)qsBtn.onclick=()=>{shuffleAll();};
   }
   document.querySelectorAll(".book").forEach(el=>{
