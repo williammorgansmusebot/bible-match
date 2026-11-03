@@ -468,9 +468,11 @@ function pickActive(pool){
   return {active:activePick,queue:shuffled.filter(v=>!activePick.includes(v))};
 }
 function startGame(){
-  let pk=pickActive(VERSES);queue=pk.queue;active=pk.active;
-  filled=active.map(v=>v.parts.map(()=>false));focused=0;
-  buildBoard();renderTop();renderBoard();
+  // Startup screen, exactly as the screenshot Chester approved:
+  // Proverbs 3:5 alone on the left, Quick Start guide filling the rest
+  // of the top row. Pressing the guide button runs shuffleAll() for
+  // 3 random books.
+  selectBook("Proverbs");
 }
 $("doneCounter").onclick=()=>{renderBookGrid();$("bookModal").classList.add("open");};
 $("bookModalClose").onclick=()=>{$("bookModal").classList.remove("open");};
