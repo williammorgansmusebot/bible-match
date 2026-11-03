@@ -198,7 +198,7 @@ const VERSES=[
 {book:"John",chap:"1:1",ref:"John 1:1",color:"#d63031",parts:["In the beginning, the Word was already there.","The Word was with God,","and the Word was God."]},
 {book:"1 Cor.",chap:"13:4",ref:"1 Corinthians 13:4",color:"#6c5ce7",parts:["Love is patient.","Love is kind.","It does not want what belongs to others.","It does not brag.","It is not proud."]},
 {book:"Jeremiah",chap:"29:11",ref:"Jeremiah 29:11",color:"#a29bfe",parts:["I know the plans I have for you,","announces the Lord.","I want you to enjoy success.","I do not plan to harm you.","I will give you hope for the years to come."]},
-{book:"Romans",chap:"8:28",ref:"Romans 8:28",color:"#6c5ce7",parts:["We know that in all things God works","for the good of those who love him.","He appointed them to be saved","in keeping with his purpose."]},,
+{book:"Romans",chap:"8:28",ref:"Romans 8:28",color:"#6c5ce7",parts:["We know that in all things God works","for the good of those who love him.","He appointed them to be saved","in keeping with his purpose."]},
 {book:"Exodus",chap:"14:14",ref:"Exodus 14:14",color:"#0984e3",parts:["The Lord will fight for you.","Just be still."]},
 {book:"Exodus",chap:"20:3",ref:"Exodus 20:3",color:"#0984e3",parts:["Do not put any other gods","in place of me."]},
 {book:"Leviticus",chap:"19:2",ref:"Leviticus 19:2",color:"#00b894",parts:["Speak to the whole community","of Israel. Tell them, Be holy,","because I am holy. I am the Lord","your God."]},
@@ -319,7 +319,7 @@ function gameRect(){return $("game").getBoundingClientRect();}
 function buildBoard(){
   board=[];let nid=1;
   active.forEach((v,vi)=>v.parts.forEach((p,pi)=>board.push({id:nid++,text:p,vi,pi,dist:false})));
-  let pool=[];queue.forEach(v=>v.parts.forEach(p=>pool.push(p)));VERSES.forEach(v=>v.parts.forEach(p=>pool.push(p)));
+  let pool=[];queue.forEach(v=>{if(v&&v.parts)v.parts.forEach(p=>pool.push(p));});VERSES.forEach(v=>{if(v&&v.parts)v.parts.forEach(p=>pool.push(p));});
   shuffle(pool);
   for(let p of pool){
     if(board.length>=20)break;
@@ -462,7 +462,7 @@ $("soundTool").onclick=()=>{
   setInfo(soundOn?"Sound ON.":"Sound OFF.");
 };
 function pickActive(pool){
-  let shuffled=shuffle([...pool]);
+  let shuffled=shuffle([...pool].filter(v=>v&&v.parts));
   let activePick=[],total=0;
   shuffled.forEach(v=>{if(activePick.length<3&&total+v.parts.length<=20){activePick.push(v);total+=v.parts.length;}});
   if(activePick.length<3){shuffled.forEach(v=>{if(activePick.length<3&&!activePick.includes(v))activePick.push(v);});}
