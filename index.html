@@ -29,6 +29,12 @@ html,body{margin:0;height:100%;background:#2d3436;display:flex;align-items:cente
 #topcontrols{position:absolute;top:1%;left:4%;right:4%;height:6%;display:flex;gap:3%;justify-content:center;z-index:6}
 #books{position:absolute;top:8%;left:2%;right:2%;height:20%;display:flex;gap:2%;z-index:3}
 .book{flex:1;position:relative;cursor:pointer;transition:transform .4s,opacity .4s}
+.book.done{outline:3px solid #ffd43b;outline-offset:3px;border-radius:14px}
+.quickstart{flex:1;display:flex;align-items:stretch;cursor:default}
+.qs-box{flex:1;background:linear-gradient(#fffdf2,#ffe9a8);border:3px solid #ffd43b;border-radius:14px;padding:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;color:#7a3b00;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.qs-title{font-weight:bold;font-size:min(3.4vw,1.9vh)}
+.qs-text{font-size:min(2.8vw,1.6vh);line-height:1.3}
+.qs-btn{background:linear-gradient(180deg,rgba(255,255,255,.45),rgba(255,255,255,0) 45%,rgba(0,0,0,.28)),#00b894;color:#fff;border:2px solid #fff;border-radius:99px;padding:6px 10px;font-weight:bold;font-size:min(3vw,1.7vh);cursor:pointer;box-shadow:0 2px 3px #0005}
 .book.focused .book-img-wrap{transform:scale(1.06)}
 .book.leave{transform:translateY(-30%) scale(.6);opacity:0}
 .book.enter{transform:translateY(-30%) scale(.6);opacity:0}
@@ -166,8 +172,7 @@ function selectBook(name){
   selectedBook=name;
   active=bookVerses.slice(0,3);
   filled=active.map(v=>v.parts.map(()=>false));focused=0;hintPtr={};
-  queue=shuffle(bookVerses.filter(v=>!active.includes(v)));
-  if(!queue.length)queue=shuffle([...bookVerses]);
+  queue=shuffle(VERSES.filter(v=>!active.includes(v)));
   buildBoard();renderTop();renderBoard();
   $("bookModal").classList.remove("open");
 }
@@ -325,11 +330,16 @@ function renderTop(){
   $("books").innerHTML=active.map((v,vi)=>{
     let done=filled[vi].filter(Boolean).length,total=v.parts.length,pct=Math.round(done/total*100);
     let hue=HUE[v.color]||"";
-    return `<div class="book ${vi===focused?"focused":""}" data-vi="${vi}">
+    let isDone=filled[vi].every(Boolean);
+    return `<div class="book ${vi===focused?"focused":""}${isDone?" done":""}" data-vi="${vi}">
       <div class="book-img-wrap"><img class="book-img" src="${BOOK_URL}" style="filter:${hue}" alt=""><span class="bpage-l">${v.chap}</span><span class="bpage-r">${done}/${total}</span></div>
       <div class="book-pill" style="background:linear-gradient(180deg,rgba(255,255,255,.45),rgba(255,255,255,0) 45%,rgba(0,0,0,.28)),${v.color}">${v.book}</div>
       <div class="book-bar"><i style="width:${pct}%"></i></div></div>`;
   }).join("");
+  if(selectedBook&&active.length<3){
+    $("books").innerHTML+=`<div class="quickstart" style="flex:${3-active.length}"><div class="qs-box"><div class="qs-title">Quick start</div><div class="qs-text">Tap a word bubble — it flies to its book. Finish a book to count a scripture.</div><button class="qs-btn" id="qsStartBtn">▶ Press here to start with 3 random books</button></div></div>`;
+    let qsBtn=$("qsStartBtn");if(qsBtn)qsBtn.onclick=()=>{shuffleAll();};
+  }
   document.querySelectorAll(".book").forEach(el=>{
     el.onclick=()=>{focused=parseInt(el.dataset.vi);renderTop();renderBoard();setInfo("Focused: "+active[focused].ref+" — tap its gold words!");tone(660,0.12,"triangle",0.1);};
   });
@@ -401,11 +411,24 @@ function clickTile(i,el){
   },470);
 }
 function replacePage(vi){
-  let next=queue.shift();
-  if(!next){if(selectedBook){queue=shuffle(versesForBook(selectedBook));}else{queue=shuffle([...VERSES]);}next=queue.shift();}
-  if(selectedBook&&next===active[vi]&&queue.length){queue.push(next);next=queue.shift();}
-  let otherTotal=active.reduce((s,v,idx)=>idx===vi?s:s+v.parts.length,0);let guard=0;
-  while(next&&otherTotal+next.parts.length>20&&queue.length&&guard<50){queue.push(next);next=queue.shift();guard++;}
+  let finishing=active[vi];
+  let isSelectedSlot=!!(selectedBook&&bookKey(finishing)===selectedBook);
+  let unseenSelected=selectedBook?versesForBook(selectedBook).filter(v=>!active.includes(v)):[];
+  let next=null;
+  if(unseenSelected.length){
+    next=shuffle([...unseenSelected])[0];
+  } else if(!isSelectedSlot){
+    next=queue.shift();
+    let dupGuard=0;
+    while(next&&active.some((v,idx)=>idx!==vi&&v===next)&&dupGuard<100){queue.push(next);next=queue.shift();dupGuard++;}
+    if(next&&active.some((v,idx)=>idx!==vi&&v===next)){queue=shuffle(VERSES.filter(v=>!active.some((av,idx)=>idx!==vi&&av===v)));next=queue.shift();}
+    if(!next){queue=shuffle(VERSES.filter(v=>!active.some((av,idx)=>idx!==vi&&av===v)));next=queue.shift();}
+    let otherTotal=active.reduce((s,v,idx)=>idx===vi?s:s+v.parts.length,0);let guard=0;
+    while(next&&otherTotal+next.parts.length>20&&queue.length&&guard<50){queue.push(next);next=queue.shift();guard++;}
+  } else {
+    renderTop();renderBoard();return;
+  }
+  if(!next){renderTop();renderBoard();return;}
   active[vi]=next;filled[vi]=next.parts.map(()=>false);focused=vi;delete hintPtr[vi];
   buildBoard();renderTop();renderBoard();
   let bookEl=document.querySelectorAll(".book")[vi];
