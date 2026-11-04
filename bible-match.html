@@ -13,6 +13,16 @@ body{display:block;min-height:100dvh}
 #game.big{max-width:900px}
 #game.big .book-img-wrap{width:78%;margin:0 auto}
 #bookModal{position:absolute;inset:0;background:rgba(0,0,0,.75);z-index:80;display:none;align-items:center;justify-content:center;padding:4%}
+#voiceModal{position:absolute;inset:0;background:rgba(0,0,0,.75);z-index:80;display:none;align-items:center;justify-content:center;padding:4%}
+#voiceModal.open{display:flex}
+#voiceModalPanel{width:100%;max-height:94%;background:linear-gradient(#fffdf2,#ffe9a8);border:4px solid #b08968;border-radius:16px;padding:12px;overflow-y:auto;box-shadow:0 8px 20px #0009}
+#voiceModalHead{display:flex;justify-content:space-between;align-items:center;font-weight:bold;color:#7a3b00;font-size:18px;margin-bottom:8px}
+#voiceModalClose{border:2px solid #b08968;border-radius:10px;background:#fff;font-weight:bold;cursor:pointer;padding:4px 10px}
+#voiceModalNote{color:#7a3b00;font-size:13px;margin-bottom:10px}
+.voice-row{padding:10px;border:2px solid #b08968;border-radius:12px;margin-bottom:8px;cursor:pointer;background:#fffdf2;color:#3a2a20}
+.voice-row.selected{border-color:#00b894;background:#d8f5e8}
+.voice-row b{display:block}
+.voice-row span{font-size:12px;color:#7a3b00}
 #bookModal.open{display:flex}
 #bookModalPanel{width:100%;max-height:94%;background:linear-gradient(#fffdf2,#ffe9a8);border:4px solid #b08968;border-radius:16px;padding:12px;overflow-y:auto;box-shadow:0 8px 20px #0009}
 #bookModalHead{display:flex;justify-content:space-between;align-items:center;font-weight:bold;color:#7a3b00;font-size:min(4vw,2.2vh);margin-bottom:4px}
@@ -91,12 +101,14 @@ body{display:block;min-height:100dvh}
 <div class="tool" id="hintTool" title="Hint">💡</div>
 <div class="tool" id="bigTool" title="Big screen">🔎</div>
 <div class="tool" id="soundTool" title="Sound">🔊</div>
+<div class="tool" id="voiceTool" title="Voice">🗣️</div>
 </div>
 <div id="books"></div>
 <div id="parchment"><div class="pin l"></div><div class="pin r"></div><div class="parch-head"><span id="parchTitle">📖 John 3:16 (NIrV)</span><span id="parchProg">0 / 4 phrases</span></div><div class="parch-lines" id="parchLines"></div></div>
 <div id="board"></div>
 <div id="credit">Scripture: Holy Bible, New International Reader's Version® (NIrV) © 1995, 1996, 1998, 2014 Biblica, Inc.® Used by permission. All rights reserved worldwide.</div>
 
+<div id="voiceModal"><div id="voiceModalPanel"><div id="voiceModalHead"><span>Choose a voice</span><button id="voiceModalClose" title="Close">✕</button></div><div id="voiceModalNote">Tap a voice to hear it and save it for the sparkling-book readings.</div><div id="voiceList"></div></div></div>
 <div id="bookModal"><div id="bookModalPanel"><div id="bookModalHead"><span>Choose a book (NIrV)</span><button id="bookModalClose" title="Close">✕</button></div><div id="bookModalCount"></div><button id="shuffleAllBtn">🔀 Shuffle all books</button><div id="bookGrid"></div></div></div>
 </div>
 <script>
@@ -312,6 +324,33 @@ const VERSES=[
 let combo=0,scripturesDone=0,soundOn=true,big=false,inFlight=new Set();
 let hintPtr={};
 let queue=[],active=[],filled=[],focused=0,board=[],sparkle=[],readingVi=null;
+let chosenVoiceURI=null;
+try{chosenVoiceURI=(typeof localStorage!=="undefined")?localStorage.getItem("bible_voice_uri"):null;}catch(e){chosenVoiceURI=null;}
+function getSpeechVoices(){try{return ("speechSynthesis" in window)?speechSynthesis.getVoices():[];}catch(e){return [];}}
+function chosenVoice(){let vs=getSpeechVoices();return vs.find(v=>v.voiceURI===chosenVoiceURI)||null;}
+function renderVoiceList(){
+  let vs=getSpeechVoices();
+  let en=vs.filter(v=>(v.lang||"").toLowerCase().startsWith("en"));
+  let other=vs.filter(v=>!(v.lang||"").toLowerCase().startsWith("en"));
+  let ordered=[...en.sort((a,b)=>a.name.localeCompare(b.name)),...other.sort((a,b)=>a.name.localeCompare(b.name))];
+  let el=$("voiceList");if(!el)return;
+  if(!ordered.length){el.innerHTML=`<div class="voice-row">No voices found on this device yet. Try closing and reopening this picker, or download voices in Settings &gt; Accessibility &gt; Spoken Content.</div>`;return;}
+  let cur=chosenVoice();
+  el.innerHTML=`<div class="voice-row${!cur?" selected":""}" data-uri=""><b>Default voice</b><span>Your phone's usual voice</span></div>`+ordered.map(v=>`<div class="voice-row${cur&&cur.voiceURI===v.voiceURI?" selected":""}" data-uri="${v.voiceURI}"><b>${v.name}</b><span>${v.lang}</span></div>`).join("");
+  el.querySelectorAll(".voice-row").forEach(row=>{
+    row.onclick=()=>{
+      let uri=row.dataset.uri;
+      chosenVoiceURI=uri||null;
+      try{if(typeof localStorage!=="undefined"){if(uri)localStorage.setItem("bible_voice_uri",uri);else localStorage.removeItem("bible_voice_uri");}}catch(e){}
+      renderVoiceList();
+      let v=uri?ordered.find(x=>x.voiceURI===uri):null;
+      try{speechSynthesis.cancel();}catch(e){}
+      try{let u=new SpeechSynthesisUtterance("This is "+(v?v.name:"the default voice")+".");if(v)u.voice=v;u.rate=0.95;speechSynthesis.speak(u);}catch(e){}
+    };
+  });
+}
+function openVoicePicker(){renderVoiceList();$("voiceModal").classList.add("open");}
+try{if("speechSynthesis" in window&&speechSynthesis.onvoiceschanged!==undefined){speechSynthesis.onvoiceschanged=()=>{if($("voiceModal")&&$("voiceModal").classList.contains("open"))renderVoiceList();};}}catch(e){}
 const $=id=>document.getElementById(id);
 function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 let ctx=null;
@@ -386,7 +425,8 @@ function readAloud(vi){
   try{speechSynthesis.cancel();}catch(e){}
   try{
     let u=new SpeechSynthesisUtterance(v.ref+". "+v.parts.join(" "));
-    u.rate=0.95;u.lang="en-US";
+    let cv=chosenVoice();if(cv){u.voice=cv;u.lang=cv.lang||"en-US";}else{u.lang="en-US";}
+    u.rate=0.95;
     u.onend=()=>{if(readingVi===vi){readingVi=null;closeBook(vi);}};
     u.onerror=()=>{if(readingVi===vi){readingVi=null;closeBook(vi);}};
     speechSynthesis.speak(u);
@@ -492,6 +532,9 @@ $("soundTool").onclick=()=>{
   soundOn=!soundOn;$("soundTool").textContent=soundOn?"🔊":"🔇";
   setInfo(soundOn?"Sound ON.":"Sound OFF.");
 };
+$("voiceTool").onclick=()=>{openVoicePicker();};
+$("voiceModalClose").onclick=()=>{$("voiceModal").classList.remove("open");};
+$("voiceModal").onclick=(e)=>{if(e.target.id==="voiceModal")$("voiceModal").classList.remove("open");};
 function pickActive(pool){
   let shuffled=shuffle([...pool].filter(v=>v&&v.parts));
   let activePick=[],total=0;
