@@ -31,6 +31,10 @@ body{display:block;min-height:100dvh}
 #books{position:static;height:clamp(130px,22dvh,200px);flex:none;display:flex;gap:2%;z-index:5;margin:8px 2% 0}
 .book{flex:1;position:relative;cursor:pointer;transition:transform .4s,opacity .4s}
 .book.done{outline:3px solid #ffd43b;outline-offset:3px;border-radius:14px}
+.book.sparkle{animation:sparkleGlow 1s ease-in-out infinite}
+@keyframes sparkleGlow{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.07);filter:brightness(1.3)}}
+.sparkle-badge{position:absolute;top:-8px;right:-8px;font-size:22px;z-index:2;animation:twinkle .8s ease-in-out infinite alternate;pointer-events:none}
+@keyframes twinkle{from{transform:scale(.8) rotate(-10deg);opacity:.6}to{transform:scale(1.25) rotate(10deg);opacity:1}}
 .quickstart{flex:1;display:flex;align-items:stretch;cursor:default}
 .qs-box{flex:1;background:linear-gradient(#fffdf2,#ffe9a8);border:3px solid #ffd43b;border-radius:14px;padding:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;color:#7a3b00;box-shadow:0 3px 0 rgba(0,0,0,.35)}
 .qs-title{font-weight:bold;font-size:min(3.4vw,1.9vh)}
@@ -172,7 +176,7 @@ function selectBook(name){
   if(!bookVerses.length)return;
   selectedBook=name;
   active=bookVerses.slice(0,3);
-  filled=active.map(v=>v.parts.map(()=>false));focused=0;hintPtr={};
+  filled=active.map(v=>v.parts.map(()=>false));sparkle=active.map(()=>false);focused=0;hintPtr={};try{speechSynthesis.cancel();}catch(e){}readingVi=null;
   queue=shuffle(VERSES.filter(v=>!active.includes(v)));
   buildBoard();renderTop();renderBoard();
   $("bookModal").classList.remove("open");
@@ -180,7 +184,7 @@ function selectBook(name){
 function shuffleAll(){
   selectedBook=null;
   let pk=pickActive(VERSES);queue=pk.queue;active=pk.active;
-  filled=active.map(v=>v.parts.map(()=>false));focused=0;hintPtr={};
+  filled=active.map(v=>v.parts.map(()=>false));sparkle=active.map(()=>false);focused=0;hintPtr={};try{speechSynthesis.cancel();}catch(e){}readingVi=null;
   buildBoard();renderTop();renderBoard();
   $("bookModal").classList.remove("open");
 }
@@ -307,7 +311,7 @@ const VERSES=[
 ];
 let combo=0,scripturesDone=0,soundOn=true,big=false,inFlight=new Set();
 let hintPtr={};
-let queue=[],active=[],filled=[],focused=0,board=[];
+let queue=[],active=[],filled=[],focused=0,board=[],sparkle=[],readingVi=null;
 const $=id=>document.getElementById(id);
 function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
 let ctx=null;
@@ -332,7 +336,7 @@ function renderTop(){
     let done=filled[vi].filter(Boolean).length,total=v.parts.length,pct=Math.round(done/total*100);
     let hue=HUE[v.color]||"";
     let isDone=filled[vi].every(Boolean);
-    return `<div class="book ${vi===focused?"focused":""}${isDone?" done":""}" data-vi="${vi}">
+    return `<div class="book ${vi===focused?"focused":""}${isDone?" done":""}${sparkle[vi]?" sparkle":""}" data-vi="${vi}">${sparkle[vi]?`<span class="sparkle-badge">✨</span>`:""}
       <div class="book-img-wrap"><img class="book-img" src="${BOOK_URL}" style="filter:${hue}" alt=""><span class="bpage-l">${v.chap}</span><span class="bpage-r">${done}/${total}</span></div>
       <div class="book-pill" style="background:linear-gradient(180deg,rgba(255,255,255,.45),rgba(255,255,255,0) 45%,rgba(0,0,0,.28)),${v.color}">${v.book}</div>
       <div class="book-bar"><i style="width:${pct}%"></i></div></div>`;
@@ -342,7 +346,7 @@ function renderTop(){
     let qsBtn=$("qsStartBtn");if(qsBtn)qsBtn.onclick=()=>{shuffleAll();};
   }
   document.querySelectorAll(".book").forEach(el=>{
-    el.onclick=()=>{focused=parseInt(el.dataset.vi);renderTop();renderBoard();setInfo("Focused: "+active[focused].ref+" — tap its gold words!");tone(660,0.12,"triangle",0.1);};
+    el.onclick=()=>{let vi=parseInt(el.dataset.vi);if(sparkle[vi]){readAloud(vi);return;}focused=vi;renderTop();renderBoard();setInfo("Focused: "+active[focused].ref+" — tap its gold words!");tone(660,0.12,"triangle",0.1);};
   });
   let v=active[focused];
   if(v){
@@ -371,6 +375,37 @@ function floatTxt(el,text){
 function poofAt(el){
   let g=gameRect(),r=el.getBoundingClientRect(),d=document.createElement("div");d.className="poof";
   d.style.left=(r.left-g.left+r.width/2)+"px";d.style.top=(r.top-g.top+r.height/2)+"px";$("game").appendChild(d);setTimeout(()=>d.remove(),650);
+}
+function readAloud(vi){
+  if(readingVi===vi){try{speechSynthesis.cancel();}catch(e){}readingVi=null;closeBook(vi);return;}
+  if(readingVi!==null){try{speechSynthesis.cancel();}catch(e){}readingVi=null;}
+  let v=active[vi];if(!v)return;
+  focused=vi;renderTop();renderBoard();
+  readingVi=vi;
+  if(!("speechSynthesis" in window)){readingVi=null;closeBook(vi);return;}
+  try{speechSynthesis.cancel();}catch(e){}
+  try{
+    let u=new SpeechSynthesisUtterance(v.ref+". "+v.parts.join(" "));
+    u.rate=0.95;u.lang="en-US";
+    u.onend=()=>{if(readingVi===vi){readingVi=null;closeBook(vi);}};
+    u.onerror=()=>{if(readingVi===vi){readingVi=null;closeBook(vi);}};
+    speechSynthesis.speak(u);
+  }catch(e){readingVi=null;closeBook(vi);}
+}
+function closeBook(vi){
+  sparkle[vi]=false;
+  let finishing=active[vi];if(!finishing)return;
+  let isSelectedSlot=!!(selectedBook&&bookKey(finishing)===selectedBook);
+  let unseenSelected=selectedBook?versesForBook(selectedBook).filter(v=>!active.includes(v)):[];
+  if(isSelectedSlot&&!unseenSelected.length){
+    if(active.length<=1){shuffleAll();return;}
+    active.splice(vi,1);filled.splice(vi,1);sparkle.splice(vi,1);hintPtr={};
+    if(focused>=active.length)focused=Math.max(0,active.length-1);
+    buildBoard();renderTop();renderBoard();return;
+  }
+  let bookEl=document.querySelectorAll(".book")[vi];
+  if(bookEl)bookEl.classList.add("leave");
+  setTimeout(()=>replacePage(vi),520);
 }
 function clickTile(i,el){
   let t=board[i];if(!t||inFlight.has(t.id))return;
@@ -403,11 +438,7 @@ function clickTile(i,el){
       scripturesDone++;let dc=$("doneCount");if(dc)dc.textContent=scripturesDone;
       good();poofAt(document.querySelectorAll(".book")[t.vi]);
       setInfo("🎉 Page complete! "+active[t.vi].ref+" — "+active[t.vi].parts.join(" ")+" (NIrV)");
-      let bookEl=document.querySelectorAll(".book")[t.vi];
-      setTimeout(()=>{
-        if(bookEl)bookEl.classList.add("leave");
-        setTimeout(()=>replacePage(t.vi),520);
-      },900);
+      sparkle[t.vi]=true;renderTop();
     }
   },470);
 }
@@ -430,7 +461,7 @@ function replacePage(vi){
     renderTop();renderBoard();return;
   }
   if(!next){renderTop();renderBoard();return;}
-  active[vi]=next;filled[vi]=next.parts.map(()=>false);focused=vi;delete hintPtr[vi];
+  active[vi]=next;filled[vi]=next.parts.map(()=>false);sparkle[vi]=false;focused=vi;delete hintPtr[vi];
   buildBoard();renderTop();renderBoard();
   let bookEl=document.querySelectorAll(".book")[vi];
   if(bookEl){bookEl.classList.add("enter");setTimeout(()=>bookEl.classList.remove("enter"),550);}
